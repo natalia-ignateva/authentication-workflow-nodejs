@@ -33,14 +33,30 @@ app.get('/', (req, res) =>
     req.session.passport ? res.render('index') : res.render('signup'),
 );
 
+app.get('/logout', async (req, res) => {
+    req.logout();
+    req.session.destroy();
+    return res.redirect('/');
+});
+
 app.post('/register', async (req, res) => {
     const { email, password } = req.body;
 
-    const user = await User.create({ email, password });
+    try {
+        const user = await User.create({ email, password });
 
-    req.login(user, (err) => {
-        return res.redirect('/');
-    });
+        req.login(user, (err) => {
+            if (err) return res.render('error', { message: err });
+            return res.redirect('/');
+        });
+    } catch (error) {
+        res.statusCode = 500;
+        let message = 'An error occurred';
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            message = 'User already exists. Use login instead.';
+        }
+        res.render('error', { message });
+    }
 });
 
 app.use(
