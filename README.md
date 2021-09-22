@@ -1,4 +1,4 @@
-# Authentification worcflow with Node.js and Password
+# Authentification workflow with Node.js and Password
 
 A project which implemented an example of authentication workflow using Node.js, Passport, Postgres and Sequelize.
 

@@ -8,8 +8,6 @@ const sequelize = require('./database.js');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(express.urlencoded({ extended: true }));
-
 const User = require('./user.js');
 User.sync({ alter: true });
 app.set('view engine', 'pug');
@@ -29,8 +27,61 @@ passport.deserializeUser((email, done) => {
     });
 });
 
+passport.use(
+    new LocalStrategy(
+        {
+            usernameField: 'email',
+            passwordField: 'password',
+        },
+        async function (email, password, done) {
+            if (!email || !password) {
+                done('Email and password required', null);
+                return;
+            }
+
+            const user = await User.findOne({ where: { email: email } });
+
+            if (!user) {
+                done('User not found', null);
+                return;
+            }
+
+            const valid = await user.isPasswordValid(password);
+
+            if (!valid) {
+                done('Email and password do not match', null);
+                return;
+            }
+
+            done(null, user);
+        },
+    ),
+);
+
+app.use(express.urlencoded({ extended: true }));
+
+app.use(
+    session({
+        secret: '094vrowcd', //random string
+        resave: false,
+        saveUninitialized: true,
+        name: 'authpassport',
+        cookie: {
+            secure: false,
+            maxAge: 30 * 24 * 60 * 60 * 1000, //30 days
+        },
+        store: sessionStore,
+    }),
+    passport.initialize(),
+    passport.session(),
+);
+
 app.get('/', (req, res) =>
     req.session.passport ? res.render('index') : res.render('signup'),
+);
+
+app.get('/login', (req, res) =>
+    req.session.passport ? res.render('index') : res.render('login'),
 );
 
 app.get('/logout', async (req, res) => {
@@ -59,20 +110,19 @@ app.post('/register', async (req, res) => {
     }
 });
 
-app.use(
-    session({
-        secret: '094vrowcd', //random string
-        resave: false,
-        saveUninitialized: true,
-        name: 'authpassport',
-        cookie: {
-            secure: false,
-            maxAge: 30 * 24 * 60 * 60 * 1000, //30 days
-        },
-        store: sessionStore,
-    }),
-    passport.initialize(),
-    passport.session(),
-);
+app.post('/login', async (req, res) => {
+    passport.authenticate('local', (err, user, info) => {
+        if (err) return res.render('error', { message: err });
+        if (!user)
+            return res.render('error', {
+                message: 'No user matching credentials',
+            });
+
+        req.login(user, (err) => {
+            if (err) return res.render('error', { message: err });
+            return res.redirect('/');
+        });
+    })(req, res);
+});
 
 app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
